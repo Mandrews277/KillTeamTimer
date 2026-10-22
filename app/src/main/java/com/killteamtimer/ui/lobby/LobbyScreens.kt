@@ -1,8 +1,11 @@
 package com.killteamtimer.ui.lobby
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -65,11 +68,13 @@ private fun nearbyPermissions(): List<String> = buildList {
     }
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         add(Manifest.permission.NEARBY_WIFI_DEVICES)
-    } else {
-        add(Manifest.permission.ACCESS_COARSE_LOCATION)
-        add(Manifest.permission.ACCESS_FINE_LOCATION)
     }
+    // Nearby discovery still requires precise location on every Android version.
+    add(Manifest.permission.ACCESS_COARSE_LOCATION)
+    add(Manifest.permission.ACCESS_FINE_LOCATION)
 }
+
+private fun nearbyGranted(isGranted: (String) -> Boolean): Boolean = nearbyPermissions().all(isGranted)
 
 @Composable
 private fun ScreenColumn(content: @Composable () -> Unit) {
@@ -96,23 +101,19 @@ fun LobbyEntryScreen(
     val context = LocalContext.current
     var pending by remember { mutableStateOf<(() -> Unit)?>(null) }
     var permissionError by remember { mutableStateOf(false) }
-    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-        if (result.values.all { it }) pending?.invoke() else permissionError = true
+    fun hasPermission(perm: String) =
+        ContextCompat.checkSelfPermission(context, perm) == PackageManager.PERMISSION_GRANTED
+
+    val launcher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        if (nearbyGranted(::hasPermission)) pending?.invoke() else permissionError = true
         pending = null
     }
 
     fun proceed(action: () -> Unit) {
         permissionError = false
-        if (linkType == LinkType.WIFI) return action()
-        val missing = nearbyPermissions().filter {
-            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
-        }
-        if (missing.isEmpty()) {
-            action()
-        } else {
-            pending = action
-            launcher.launch(missing.toTypedArray())
-        }
+        if (linkType == LinkType.WIFI || nearbyGranted(::hasPermission)) return action()
+        pending = action
+        launcher.launch(nearbyPermissions().filterNot(::hasPermission).toTypedArray())
     }
 
     ScreenColumn {
@@ -140,9 +141,15 @@ fun LobbyEntryScreen(
         )
         if (permissionError) {
             Text(
-                "Nearby needs the Bluetooth / nearby devices permissions. Allow them, or use Same Wi-Fi.",
+                "Nearby needs the nearby devices permission and PRECISE location (approximate isn't enough). " +
+                    "Allow them in settings, or use Same Wi-Fi.",
                 color = MaterialTheme.colorScheme.error,
             )
+            OutlinedButton(onClick = {
+                context.startActivity(
+                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null)),
+                )
+            }) { Text("Open app settings") }
         }
         Spacer(Modifier.height(16.dp))
         Button(onClick = { proceed(onHost) }, Modifier.fillMaxWidth().height(56.dp), enabled = name.isNotBlank()) {

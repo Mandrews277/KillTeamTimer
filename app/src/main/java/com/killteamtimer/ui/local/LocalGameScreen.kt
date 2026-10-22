@@ -14,8 +14,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -158,68 +160,83 @@ private fun PlayerPanel(
             .background(background)
             .border(if (holdsClock) 4.dp else 1.dp, color, shape),
     ) {
-        BoxWithConstraints(
+        Column(
             Modifier
                 .fillMaxSize()
                 .padding(12.dp),
         ) {
-            val timeSize = minOf(maxWidth.value / 4.5f, maxHeight.value / 3.2f, 96f).sp
-
-            Text(
-                player.name,
-                Modifier.align(Alignment.TopStart),
-                color = foreground,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleMedium,
-            )
-            if (state.phase == Phase.RUNNING) {
-                PauseVoteButton(state, player.id, now, foreground, onAction, Modifier.align(Alignment.TopEnd))
-            }
-
-            val display = player.displayMs(now, state.config.mode)
-            Column(Modifier.align(Alignment.Center), horizontalAlignment = Alignment.CenterHorizontally) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    formatTime(display),
-                    fontSize = timeSize,
+                    player.name,
+                    Modifier.weight(1f),
+                    color = foreground,
                     fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace,
-                    color = if (display < 0 && !running) OvertimeRed else foreground,
+                    style = MaterialTheme.typography.titleMedium,
                 )
-                if (display < 0) {
-                    Text("OVERTIME", color = if (running) foreground else OvertimeRed, fontWeight = FontWeight.Bold)
-                }
-                if (state.phase == Phase.PAUSED) {
-                    Text("PAUSED", color = foreground, fontWeight = FontWeight.Bold)
+                if (state.phase == Phase.RUNNING) {
+                    PauseVoteButton(state, player.id, now, foreground, onAction, Modifier)
                 }
             }
 
-            Box(Modifier.align(Alignment.BottomCenter).fillMaxWidth()) {
+            // The clock takes whatever space the controls leave, shrinking its font to fit.
+            BoxWithConstraints(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
+                val timeSize = minOf(maxWidth.value / 4.5f, maxHeight.value / 2.2f, 96f).coerceAtLeast(16f).sp
+                val display = player.displayMs(now, state.config.mode)
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        formatTime(display),
+                        fontSize = timeSize,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace,
+                        color = if (display < 0 && !running) OvertimeRed else foreground,
+                    )
+                    if (display < 0) {
+                        Text("OVERTIME", color = if (running) foreground else OvertimeRed, fontWeight = FontWeight.Bold)
+                    }
+                    if (state.phase == Phase.PAUSED) {
+                        Text("PAUSED", color = foreground, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 when (state.phase) {
                     Phase.NOT_STARTED -> Button(
                         onClick = { onAction(GameAction.Start(player.id)) },
-                        Modifier.align(Alignment.Center),
+                        Modifier.heightIn(min = 56.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = color, contentColor = onPlayerColor(player.colorIndex)),
-                    ) { Text("I go first") }
+                    ) { Text("I go first", fontSize = 18.sp) }
 
                     Phase.RUNNING -> if (running) {
+                        // Big, full-width targets: one per row in narrow panels, side by side in wide ones.
                         FlowRow(
                             Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             state.players.filter { it.id != player.id }.forEach { other ->
                                 Button(
                                     onClick = { onAction(GameAction.PassTo(player.id, other.id)) },
+                                    Modifier
+                                        .widthIn(min = 140.dp)
+                                        .weight(1f)
+                                        .heightIn(min = 60.dp),
+                                    shape = RoundedCornerShape(14.dp),
                                     colors = ButtonDefaults.buttonColors(
                                         containerColor = Color.Black.copy(alpha = 0.55f),
                                         contentColor = Color.White,
                                     ),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
-                                ) { Text("→ ${other.name}", maxLines = 1) }
+                                ) { Text("→ ${other.name}", fontSize = 18.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
                             }
                         }
                     }
 
-                    Phase.PAUSED -> ResumeButton(state, player.id, now, onAction, Modifier.align(Alignment.Center))
+                    Phase.PAUSED -> ResumeButton(state, player.id, now, onAction, Modifier.heightIn(min = 56.dp))
 
                     Phase.ENDED -> Unit
                 }
