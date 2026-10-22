@@ -95,8 +95,9 @@ class HostSession(
             is TransportEvent.Received -> when (val msg = NetMessage.decode(event.payload)) {
                 is NetMessage.Hello -> onHello(event.endpointId, msg)
                 is NetMessage.Intent -> {
-                    // A client may only act as itself.
-                    if (endpointToPlayer[event.endpointId] == msg.action.by) apply(msg.action)
+                    // A client may only act as itself, and only the host can end the game.
+                    val fromSelf = endpointToPlayer[event.endpointId] == msg.action.by
+                    if (fromSelf && msg.action !is GameAction.End) apply(msg.action)
                 }
                 else -> Unit
             }

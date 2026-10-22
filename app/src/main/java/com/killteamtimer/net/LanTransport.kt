@@ -183,10 +183,22 @@ class LanTransport(context: Context) : Transport {
             }
         }
 
+        /** Reads newline-delimited messages; drops the peer if one exceeds [MAX_MESSAGE_CHARS]. */
         fun readLoop() {
             try {
-                socket.getInputStream().bufferedReader(Charsets.UTF_8).forEachLine {
-                    events.tryEmit(TransportEvent.Received(id, it))
+                val reader = socket.getInputStream().bufferedReader(Charsets.UTF_8)
+                val line = StringBuilder()
+                while (true) {
+                    val c = reader.read()
+                    if (c == -1) break
+                    if (c == '\n'.code) {
+                        events.tryEmit(TransportEvent.Received(id, line.toString()))
+                        line.setLength(0)
+                    } else if (line.length < MAX_MESSAGE_CHARS) {
+                        line.append(c.toChar())
+                    } else {
+                        break
+                    }
                 }
             } catch (_: IOException) {
                 // Fall through to close.
@@ -207,6 +219,9 @@ class LanTransport(context: Context) : Transport {
         const val DEFAULT_PORT = 47820
         private const val SERVICE_TYPE = "_ktimer._tcp"
         private const val CONNECT_TIMEOUT_MS = 5_000
+
+        /** Far above any real message (a full game state is a few KB). */
+        private const val MAX_MESSAGE_CHARS = 64 * 1024
 
         /** Best guess at this phone's LAN address, preferring Wi-Fi interfaces. */
         fun localIpv4(): String? = runCatching {

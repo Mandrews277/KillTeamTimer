@@ -114,6 +114,17 @@ class HostClientSyncTest {
     }
 
     @Test
+    fun onlyHostCanEndGame() = runTest {
+        val (_, host, clients) = setup()
+        host.startGame(GameConfig())
+        host.send(GameAction.Start(0))
+        clients[0].send(GameAction.End(1))
+        assertEquals(Phase.RUNNING, host.game.value!!.phase)
+        host.send(GameAction.End(0))
+        clients.forEach { assertEquals(Phase.ENDED, it.game.value!!.phase) }
+    }
+
+    @Test
     fun clientClockIsMappedToHostTimebase() = runTest {
         val (_, host, clients) = setup()
         host.startGame(GameConfig())
