@@ -97,6 +97,7 @@ fun LobbyEntryScreen(
     onLinkTypeChange: (LinkType) -> Unit,
     onHost: () -> Unit,
     onJoin: () -> Unit,
+    onTest: () -> Unit,
 ) {
     val context = LocalContext.current
     var pending by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -158,6 +159,10 @@ fun LobbyEntryScreen(
         FilledTonalButton(onClick = { proceed(onJoin) }, Modifier.fillMaxWidth().height(56.dp), enabled = name.isNotBlank()) {
             Text("Join a game")
         }
+        Spacer(Modifier.height(8.dp))
+        OutlinedButton(onClick = onTest, Modifier.fillMaxWidth(), enabled = name.isNotBlank()) {
+            Text("Test mode (simulated players on this phone)")
+        }
     }
 }
 
@@ -191,6 +196,7 @@ fun HostLobbyScreen(
     onConfigChange: (GameConfig) -> Unit,
     onStart: () -> Unit,
     onCancel: () -> Unit,
+    onAddTestPlayer: (() -> Unit)? = null,
 ) {
     val lobby by host.lobby.collectAsState()
     val error by host.error.collectAsState()
@@ -201,16 +207,21 @@ fun HostLobbyScreen(
         }
     }
     ScreenColumn {
-        Text("Hosting", style = MaterialTheme.typography.headlineSmall)
+        Text(if (onAddTestPlayer != null) "Test mode" else "Hosting", style = MaterialTheme.typography.headlineSmall)
         Text(
-            when (linkType) {
-                LinkType.NEARBY -> "Ask everyone to choose Nearby → Join a game."
-                LinkType.WIFI -> "Ask everyone to choose Same Wi-Fi → Join a game." +
+            when {
+                onAddTestPlayer != null ->
+                    "Add simulated players, then start. During the game you can switch which player this phone is."
+                linkType == LinkType.NEARBY -> "Ask everyone to choose Nearby → Join a game."
+                else -> "Ask everyone to choose Same Wi-Fi → Join a game." +
                     (address?.let { "\nIf they can't see you, they can enter $it" } ?: "")
             },
         )
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         LobbyList(lobby, host.myPlayerId)
+        if (onAddTestPlayer != null) {
+            FilledTonalButton(onClick = onAddTestPlayer, Modifier.fillMaxWidth()) { Text("Add test player") }
+        }
         GameOptionsForm(config, lobby.size, onConfigChange)
         Spacer(Modifier.height(8.dp))
         Button(onClick = onStart, Modifier.fillMaxWidth().height(56.dp), enabled = lobby.size >= 2) {
