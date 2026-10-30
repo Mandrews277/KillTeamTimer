@@ -6,12 +6,14 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -199,11 +201,9 @@ fun RemoteGameScreen(
             Phase.ENDED -> Unit
         }
 
-        if (canPass) {
-            PassGrid(state) { to -> controller.send(GameAction.PassTo(myId, to)) }
+        PlayerGrid(state, now, myId, canPass, disconnected) { to ->
+            controller.send(GameAction.PassTo(myId, to))
         }
-
-        PlayerList(state, now, myId, disconnected)
 
         CpCounter(commandPoints, onCommandPointsChange)
 
@@ -246,78 +246,70 @@ fun RemoteGameScreen(
     }
 }
 
+
+
+/**
+ * Every other player as a big tile showing their time. On your turn the tiles are pass buttons;
+ * otherwise they just show times, with whoever holds the clock in full colour.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun PlayerList(
+private fun PlayerGrid(
     state: GameState,
     now: Long,
     myId: Int,
+    canPass: Boolean,
     disconnected: Set<Int>,
+    onPass: (Int) -> Unit,
 ) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            state.players.forEach { p ->
-                val active = p.id == state.activePlayerId
-                val display = p.displayMs(now, state.config.mode)
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (active) playerColor(p.colorIndex).copy(alpha = 0.25f) else Color.Transparent)
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    ColorDot(p.colorIndex)
-                    Spacer(Modifier.width(10.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(
-                            p.name + if (p.id == myId) " (you)" else "",
-                            fontWeight = if (active) FontWeight.Bold else FontWeight.Normal,
-                        )
-                        if (p.id in disconnected) {
-                            Text("disconnected", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                    Text(
-                        formatTime(display),
-                        fontFamily = FontFamily.Monospace,
-                        color = if (display < 0) OvertimeRed else Color.Unspecified,
-                    )
-                }
-            }
-        }
-    }
-}
-
-/** Big pass targets, two per row, each labelled with the player it passes to. */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun PassGrid(state: GameState, onPass: (Int) -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Pass the clock to…", style = MaterialTheme.typography.titleMedium)
+        Text(if (canPass) "Pass the clock to…" else "Players", style = MaterialTheme.typography.titleMedium)
         FlowRow(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             maxItemsInEachRow = 2,
         ) {
-            state.players.filter { it.id != state.activePlayerId }.forEach { p ->
+            state.players.filter { it.id != myId }.forEach { p ->
+                val color = playerColor(p.colorIndex)
+                val holdsClock = p.id == state.activePlayerId
+                val strong = canPass || holdsClock
+                val fg = if (strong) onPlayerColor(p.colorIndex) else Color.White
+                val display = p.displayMs(now, state.config.mode)
                 Button(
                     onClick = { onPass(p.id) },
-                    Modifier.weight(1f).height(80.dp),
+                    Modifier.weight(1f).height(96.dp),
+                    enabled = canPass,
                     shape = RoundedCornerShape(16.dp),
+                    border = if (holdsClock) BorderStroke(3.dp, Color.White) else null,
+                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = playerColor(p.colorIndex),
-                        contentColor = onPlayerColor(p.colorIndex),
+                        containerColor = color,
+                        contentColor = fg,
+                        disabledContainerColor = if (holdsClock) color else color.copy(alpha = 0.25f).compositeOver(Color(0xFF181818)),
+                        disabledContentColor = fg,
                     ),
                 ) {
-                    Text(
-                        p.name,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        textAlign = TextAlign.Center,
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            p.name,
+                            fontSize = 20.sp,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center,
+                        )
+                        Text(
+                            formatTime(display),
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            fontFamily = FontFamily.Monospace,
+                            color = if (display < 0 && !strong) OvertimeRed else fg,
+                        )
+                        if (p.id in disconnected) {
+                            Text("disconnected", fontSize = 12.sp, color = if (strong) fg else MaterialTheme.colorScheme.error)
+                        }
+                    }
                 }
             }
         }
