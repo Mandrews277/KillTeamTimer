@@ -3,8 +3,7 @@ package com.killteamtimer.ui.rules
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
@@ -37,7 +36,6 @@ import com.killteamtimer.rules.RulesData
  * Pick your team and what you're doing; lists the names of the rules that could apply.
  * Names only: the rules text itself lives in the official downloads.
  */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RulesHelper(teamId: String?, onTeamChange: (String) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
@@ -54,13 +52,20 @@ fun RulesHelper(teamId: String?, onTeamChange: (String) -> Unit, modifier: Modif
             }
             if (team == null) return@Column
 
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                data.tags.forEach { (id, label) ->
-                    FilterChip(
-                        selected = situation == id,
-                        onClick = { situation = if (situation == id) null else id },
-                        label = { Text(label) },
-                    )
+            // Turn-structure situations on the left, what an operative is doing on the right.
+            val (left, right) = data.tags.keys.partition { it in LEFT_COLUMN }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(left.sortedBy { LEFT_COLUMN.indexOf(it) }, right).forEach { column ->
+                    Column(Modifier.weight(1f)) {
+                        column.forEach { id ->
+                            FilterChip(
+                                selected = situation == id,
+                                onClick = { situation = if (situation == id) null else id },
+                                label = { Text(data.tags.getValue(id)) },
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                        }
+                    }
                 }
             }
 
@@ -81,6 +86,8 @@ fun RulesHelper(teamId: String?, onTeamChange: (String) -> Unit, modifier: Modif
         TeamPicker(data, onPick = { onTeamChange(it); picking = false }, onDismiss = { picking = false })
     }
 }
+
+private val LEFT_COLUMN = listOf("strategy", "activate", "incapacitated", "end", "general", "action")
 
 /** Names grouped under their heading: "Boss Nob" then its abilities, or a ploy on its own. */
 @Composable
