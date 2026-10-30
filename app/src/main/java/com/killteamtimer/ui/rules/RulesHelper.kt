@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -13,12 +14,14 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LocalMinimumInteractiveComponentSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,19 +57,22 @@ fun RulesHelper(teamId: String?, onTeamChange: (String) -> Unit, modifier: Modif
 
             // Turn-structure situations on the left, what an operative is doing on the right.
             val (left, right) = data.tags.keys.partition { it in LEFT_COLUMN }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Chips are 40dp tall themselves, so the extra invisible 48dp touch padding isn't needed.
+            CompositionLocalProvider(LocalMinimumInteractiveComponentSize provides 0.dp) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(left.sortedBy { LEFT_COLUMN.indexOf(it) }, right).forEach { column ->
-                    Column(Modifier.weight(1f)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         column.forEach { id ->
                             FilterChip(
                                 selected = situation == id,
                                 onClick = { situation = if (situation == id) null else id },
                                 label = { Text(data.tags.getValue(id)) },
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier.fillMaxWidth().height(40.dp),
                             )
                         }
                     }
                 }
+            }
             }
 
             val tag = situation ?: return@Column
