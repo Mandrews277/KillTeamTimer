@@ -122,28 +122,20 @@ fun RemoteGameScreen(
             )
         }
 
-        // My clock
+        // My clock: a compact strip, leaving room for the pass buttons.
         val color = playerColor(me.colorIndex)
         val highlight = myTurn && running
         val fg = if (highlight) onPlayerColor(me.colorIndex) else Color.White
         val display = me.displayMs(now, state.config.mode)
-        Column(
+        Row(
             Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(20.dp))
+                .clip(RoundedCornerShape(16.dp))
                 .background(if (highlight) color else color.copy(alpha = 0.15f).compositeOver(Color(0xFF181818)))
-                .border(2.dp, color, RoundedCornerShape(20.dp))
-                .padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
+                .border(2.dp, color, RoundedCornerShape(16.dp))
+                .padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(me.name, color = fg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleLarge)
-            Text(
-                formatTime(display),
-                fontSize = 72.sp,
-                fontWeight = FontWeight.Bold,
-                fontFamily = FontFamily.Monospace,
-                color = if (display < 0 && !highlight) OvertimeRed else fg,
-            )
             val caption = when {
                 state.phase == Phase.PAUSED -> "PAUSED"
                 state.phase == Phase.NOT_STARTED -> "Waiting for someone to start"
@@ -152,7 +144,17 @@ fun RemoteGameScreen(
                 myTurn -> "YOUR TURN"
                 else -> "Waiting on ${state.activePlayerId?.let { state.player(it)?.name } ?: "…"}"
             }
-            Text(caption, color = fg, fontWeight = FontWeight.Bold)
+            Column(Modifier.weight(1f)) {
+                Text(me.name, color = fg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                Text(caption, color = fg, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelLarge)
+            }
+            Text(
+                formatTime(display),
+                fontSize = 40.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+                color = if (display < 0 && !highlight) OvertimeRed else fg,
+            )
         }
 
         when (state.phase) {
