@@ -134,6 +134,8 @@ private fun RemoteGame(vm: AppViewModel) {
                 commandPoints = vm.commandPoints(myId),
                 onCommandPointsChange = { vm.setCommandPoints(myId, it) },
                 onExit = vm::leave,
+                teamId = vm.team(myId),
+                onTeamChange = { vm.setTeam(myId, it) },
                 header = header,
             )
         }
@@ -151,6 +153,8 @@ private fun RemoteGame(vm: AppViewModel) {
             commandPoints = vm.commandPoints(id),
             onCommandPointsChange = { vm.setCommandPoints(id, it) },
             onExit = vm::leave,
+            teamId = vm.team(id),
+            onTeamChange = { vm.setTeam(id, it) },
         )
     }
 }

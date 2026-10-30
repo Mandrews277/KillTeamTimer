@@ -1,0 +1,5 @@
+{
+  "_help": "Hand fixes applied after automatic tagging. Key = item id from rules.json. Fields: add [tags], remove [tags], hide true. Tags: strategy activate move charge shoot shot fight retaliate action objective counteract incapacitated end general",
+  "murderwing/jump-pack-example": { "hide": true },
+  "murderwing/boost-actions-example": { "hide": true }
+}

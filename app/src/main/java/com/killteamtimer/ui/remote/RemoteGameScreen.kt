@@ -65,6 +65,7 @@ import com.killteamtimer.ui.components.EndSummary
 import com.killteamtimer.ui.components.KeepScreenOn
 import com.killteamtimer.ui.components.formatTime
 import com.killteamtimer.ui.components.rememberNow
+import com.killteamtimer.ui.rules.RulesHelper
 import com.killteamtimer.ui.theme.OvertimeRed
 import com.killteamtimer.ui.theme.onPlayerColor
 import com.killteamtimer.ui.theme.playerColor
@@ -83,6 +84,8 @@ fun RemoteGameScreen(
     commandPoints: Int,
     onCommandPointsChange: (Int) -> Unit,
     onExit: () -> Unit,
+    teamId: String?,
+    onTeamChange: (String) -> Unit,
     header: (@Composable () -> Unit)? = null,
 ) {
     KeepScreenOn()
@@ -206,6 +209,8 @@ fun RemoteGameScreen(
         }
 
         CpCounter(commandPoints, onCommandPointsChange)
+
+        RulesHelper(teamId, onTeamChange)
 
         Spacer(Modifier.height(8.dp))
         OutlinedButton(onClick = { confirmLeave = true }, Modifier.fillMaxWidth()) {

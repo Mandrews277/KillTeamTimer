@@ -64,6 +64,16 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
         commandPoints[playerId] = value
     }
 
+    /** Each player's kill team for the rules helper; the last choice is remembered for next time. */
+    private val teams = mutableStateMapOf<Int, String>()
+
+    fun team(playerId: Int): String? = teams[playerId] ?: prefs.getString("team", null)
+
+    fun setTeam(playerId: Int, teamId: String) {
+        teams[playerId] = teamId
+        prefs.edit { putString("team", teamId) }
+    }
+
     /** Test mode: one phone runs the host and simulated players, switching between them. */
     var testMode by mutableStateOf(false)
         private set
