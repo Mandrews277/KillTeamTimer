@@ -87,7 +87,7 @@ fun RulesHelper(teamId: String?, onTeamChange: (String) -> Unit, modifier: Modif
     }
 }
 
-private val LEFT_COLUMN = listOf("strategy", "activate", "incapacitated", "end", "general", "action")
+private val LEFT_COLUMN = listOf("strategy", "activate", "objective", "incapacitated", "end", "general", "action")
 
 /** Names grouped under their heading: "Boss Nob" then its abilities, or a ploy on its own. */
 @Composable
