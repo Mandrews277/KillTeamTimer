@@ -42,7 +42,7 @@ import com.killteamtimer.rules.RulesData
 @Composable
 fun RulesHelper(teamId: String?, onTeamChange: (String) -> Unit, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val data = remember { RulesData.load(context) }
+    val data = RulesData.load(context)
     val team = data.team(teamId)
     var situation by rememberSaveable { mutableStateOf<String?>(null) }
     var picking by remember { mutableStateOf(false) }

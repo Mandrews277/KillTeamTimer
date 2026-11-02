@@ -19,10 +19,12 @@ import com.killteamtimer.engine.Player
 import com.killteamtimer.net.LanTransport
 import com.killteamtimer.net.LoopbackNetwork
 import com.killteamtimer.net.NearbyTransport
+import com.killteamtimer.rules.RulesData
 import com.killteamtimer.session.ClientSession
 import com.killteamtimer.session.HostEndpoint
 import com.killteamtimer.session.HostSession
 import com.killteamtimer.session.LocalGameController
+import kotlinx.coroutines.launch
 import java.util.UUID
 
 enum class Screen { HOME, LOCAL_SETUP, LOCAL_GAME, LOBBY_ENTRY, HOST_LOBBY, JOIN_LOBBY, REMOTE_GAME }
@@ -35,6 +37,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
 
     private val prefs = app.getSharedPreferences("ktt", Context.MODE_PRIVATE)
     private val clock = Clock { SystemClock.elapsedRealtime() }
+
+    init {
+        viewModelScope.launch { RulesData.refresh(app) }
+    }
 
     /** Stable per-install id so the host can give a reconnecting phone its old seat. */
     val deviceId: String = prefs.getString("deviceId", null) ?: UUID.randomUUID().toString().also {

@@ -1,0 +1,53 @@
+# Rebuilds app/src/main/assets/rules.json from the Warhammer Community downloads and commits it if it
+# changed. Installed apps download that file on launch, so new teams and errata reach everyone without
+# a new APK. Runs weekly, whenever the tagging rules or hand fixes change, or by hand from the Actions tab.
+name: Update rules
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+  push:
+    branches: [master]
+    paths:
+      - tools/rules/tagging.py
+      - tools/rules/tag-overrides.json
+      - tools/rules/build_rules.py
+
+permissions:
+  contents: write
+
+concurrency: rules
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      # PDFs are only re-downloaded when the site lists a new file.
+      - uses: actions/cache@v4
+        with:
+          path: tools/rules/cache
+          key: rules-pdfs-${{ github.run_id }}
+          restore-keys: rules-pdfs-
+
+      - run: pip install -r tools/rules/requirements.txt
+
+      - name: Build
+        run: |
+          python tools/rules/build_rules.py | tee build.log
+          { echo '```'; cat build.log; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Commit if changed
+        run: |
+          git diff --quiet app/src/main/assets/rules.json && { echo "No changes."; exit 0; }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/src/main/assets/rules.json
+          git commit -m "Update rules from Warhammer Community"
+          git push

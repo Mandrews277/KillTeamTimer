@@ -20,6 +20,7 @@ import re
 import sys
 import urllib.request
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pymupdf
@@ -366,15 +367,25 @@ def main() -> int:
 
     new = [i for i in hashes if previous and i not in previous]
     if not args.only:
-        OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-        OUTPUT.write_text(json.dumps({
+        data = {
             "source": "https://www.warhammer-community.com/en-gb/downloads/kill-team/",
             "tags": TAGS,
             "universal": universal,
             "teams": teams,
-        }, ensure_ascii=False, indent=1), encoding="utf-8")
+        }
+        old = json.loads(OUTPUT.read_text(encoding="utf-8")) if OUTPUT.exists() else {}
+        # A failed download or a site redesign shows up as missing teams; keep the last good file.
+        if len(teams) < 0.8 * len(old.get("teams", [])):
+            print(f"\nOnly {len(teams)} teams parsed (had {len(old['teams'])}); not overwriting.")
+            return 1
+        # Apps keep whichever copy has the later stamp, so only move it when something changed.
+        stamp = old.pop("generated", None)
+        if old != data or not stamp:
+            stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+        OUTPUT.write_text(json.dumps({"generated": stamp, **data}, ensure_ascii=False, indent=1), encoding="utf-8")
         PREVIOUS_TEXT.write_text(json.dumps(hashes))
-        print(f"\nWrote {OUTPUT.relative_to(REPO)} ({OUTPUT.stat().st_size // 1024} KB, {len(teams)} teams)")
+        print(f"\nWrote {OUTPUT.relative_to(REPO)} ({OUTPUT.stat().st_size // 1024} KB, {len(teams)} teams, {stamp})")
 
     print(f"\nUntagged ({len(untagged)}):")
     for i in untagged:
