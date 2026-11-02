@@ -1,5 +1,9 @@
 package com.killteamtimer.cover
 
+import kotlin.math.abs
+import kotlin.math.hypot
+import kotlin.math.roundToInt
+
 /**
  * Cover, obscured and valid-target rules (Kill Team 2024 core rules plus the October '26 errata)
  * for one shooter and one target with terrain between them, reduced to distances along the line.
@@ -31,6 +35,10 @@ data class CoverSetup(
     val seek: Seek = Seek.NONE,
     val saturate: Boolean = false,
     val pieces: List<TerrainPiece> = emptyList(),
+    /** The shooter's Move stat, for charge reach. */
+    val move: Float = 6f,
+    /** Display only: how far down the board the target has been dragged. */
+    val targetAt: Float = 0f,
 ) {
     fun distanceFromShooter(p: TerrainPiece) = distance - p.fromTarget
 }
@@ -44,6 +52,10 @@ data class Finding(val tone: Tone, val title: String, val detail: String)
 enum class CoverSave { NONE, NORMAL, IMPROVED, SATURATED }
 
 data class CoverResult(
+    /** Within each other's control range: Fight, not Shoot. */
+    val melee: Boolean,
+    /** Not in melee, but a Charge (Move + 2") can end within 1". */
+    val canCharge: Boolean,
     val valid: Boolean,
     val coverSave: CoverSave,
     val obscured: Boolean,
@@ -56,10 +68,24 @@ data class CoverResult(
 private const val CONTROL_RANGE = 1f
 private const val TOO_CLOSE = 2f
 
+private const val CHARGE_BONUS = 2f
+
 fun evaluate(s: CoverSetup): CoverResult {
     val findings = mutableListOf<Finding>()
     val tooClose = s.distance <= TOO_CLOSE
     val drop = s.shooterHeight - s.targetHeight
+
+    // Control range is measured in three dimensions, so a height difference can keep them apart.
+    if (s.visible && hypot(s.distance, drop) <= CONTROL_RANGE) {
+        findings += Finding(Tone.GOOD_FOR_SHOOTER, "Can Fight", "The enemy is within control range (visible and within 1\").")
+        findings += Finding(Tone.GOOD_FOR_TARGET, "Can't Shoot", "An operative can't Shoot while within control range of an enemy operative.")
+        findings += Finding(
+            Tone.INFO, "Other actions",
+            "Can't Charge, Reposition or Dash while within control range of an enemy. It can Fall Back (2AP) but can't end that move within control range.",
+        )
+        return CoverResult(melee = true, canCharge = false, valid = false, CoverSave.NONE, obscured = false, accurate = 0,
+            roles = s.pieces.associate { it.id to PieceRole.NONE }, findings = findings)
+    }
     val shooterOnVantage = s.shooterHeight > 0f
 
     val cover = if (tooClose) emptyList() else s.pieces.filter { it.fromTarget <= CONTROL_RANGE }
@@ -161,6 +187,19 @@ fun evaluate(s: CoverSetup): CoverResult {
         )
     }
 
+    // A Charge moves Move + 2" and must finish within 1"; on the flat it needs to cover distance - 1".
+    val chargeNeeded = (s.distance - CONTROL_RANGE).coerceAtLeast(0f)
+    val canCharge = chargeNeeded <= s.move + CHARGE_BONUS
+    val climb = if (drop != 0f) " Climbing ${inches(abs(drop))} counts too." else ""
+    findings += if (canCharge) {
+        Finding(
+            Tone.GOOD_FOR_SHOOTER, "Can Charge",
+            "Needs ${inches(chargeNeeded)} of its ${inches(s.move + CHARGE_BONUS)} charge move (Move + 2\") to end within 1\", if nothing is in the way.$climb Needs an Engage order.",
+        )
+    } else {
+        Finding(Tone.INFO, "Out of charge range", "Needs ${inches(chargeNeeded)} to end within 1\", but a Charge only moves ${inches(s.move + CHARGE_BONUS)} (Move + 2\").")
+    }
+
     val roles = s.pieces.associate { p ->
         p.id to when (p) {
             in cover -> PieceRole.COVER
@@ -168,5 +207,13 @@ fun evaluate(s: CoverSetup): CoverResult {
             else -> PieceRole.NONE
         }
     }
-    return CoverResult(valid, save, obscured, accurate, roles, findings)
+    return CoverResult(melee = false, canCharge, valid, save, obscured, accurate, roles, findings)
 }
+
+/** 2.25 -> 2¼", the way distances are read off a tape measure. */
+fun inches(v: Float): String {
+    val whole = v.toInt()
+    val frac = when (((v - whole) * 4).roundToInt()) { 1 -> "¼"; 2 -> "½"; 3 -> "¾"; 4 -> return "${whole + 1}\""; else -> "" }
+    return if (whole == 0 && frac.isNotEmpty()) "$frac\"" else "$whole$frac\""
+}
+

@@ -85,6 +85,22 @@ class CoverCheckTest {
         assertEquals(CoverSave.SATURATED, evaluate(CoverSetup(saturate = true, pieces = listOf(light(0.5f)))).coverSave)
     }
 
+    @Test fun `within 1 inch is melee, not shooting`() {
+        val r = evaluate(CoverSetup(distance = 1f, pieces = listOf(light(0.5f))))
+        assertTrue(r.melee)
+        assertFalse(r.valid)
+        assertFalse(r.canCharge)
+    }
+
+    @Test fun `height difference keeps them out of control range`() {
+        assertFalse(evaluate(CoverSetup(distance = 0.5f, shooterHeight = 3f)).melee)
+    }
+
+    @Test fun `charge reaches move plus 2 plus control range`() {
+        assertTrue(evaluate(CoverSetup(distance = 9f, move = 6f)).canCharge)
+        assertFalse(evaluate(CoverSetup(distance = 9.25f, move = 6f)).canCharge)
+    }
+
     @Test fun `not visible is never valid`() {
         assertFalse(evaluate(CoverSetup(visible = false)).valid)
     }

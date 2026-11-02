@@ -1,5 +1,6 @@
 package com.killteamtimer.ui.cover
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -58,6 +59,7 @@ import com.killteamtimer.cover.TerrainPiece
 import com.killteamtimer.cover.TerrainType
 import com.killteamtimer.cover.Tone
 import com.killteamtimer.cover.evaluate
+import com.killteamtimer.cover.inches
 import com.killteamtimer.ui.components.Segmented
 import com.killteamtimer.ui.components.Stepper
 import kotlin.math.abs
@@ -71,7 +73,7 @@ private val CoverColor = Color(0xFFFFB300)
 private val ObscureColor = Color(0xFFBA68C8)
 
 /**
- * Target at the top, shooter at the bottom, terrain as lines across the gap. Drag a line to move it;
+ * Target at the top, shooter below, terrain as lines across the gap. Drag the operatives or the lines;
  * everything below the diagram updates live.
  */
 @Composable
@@ -104,7 +106,7 @@ fun CoverCheckScreen(setup: CoverSetup, onChange: (CoverSetup) -> Unit, onBack: 
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Diagram(setup, result, selectedId, onSelect = { selectedId = it }, onMove = { update(it) })
+        Diagram(setup, result, selectedId, onSelect = { selectedId = it }, onChange = { onChange(it) })
 
         Results(result)
 
@@ -124,11 +126,13 @@ fun CoverCheckScreen(setup: CoverSetup, onChange: (CoverSetup) -> Unit, onBack: 
                 Text("Distance between them: ${inches(setup.distance)}", style = MaterialTheme.typography.titleSmall)
                 Slider(
                     value = setup.distance,
-                    onValueChange = { d ->
-                        val dist = (d * 2).roundToInt() / 2f
-                        onChange(setup.copy(distance = dist, pieces = setup.pieces.map { it.copy(fromTarget = it.fromTarget.coerceAtMost(dist)) }))
-                    },
-                    valueRange = 1f..24f,
+                    onValueChange = { d -> onChange(setup.withDistance((d * 2).roundToInt() / 2f)) },
+                    valueRange = 0f..24f,
+                )
+                Stepper(
+                    "Shooter's Move", inches(setup.move),
+                    onMinus = { onChange(setup.copy(move = (setup.move - 1).coerceAtLeast(1f))) },
+                    onPlus = { onChange(setup.copy(move = setup.move + 1)) },
                 )
                 Text("Target", style = MaterialTheme.typography.titleSmall)
                 Segmented(TargetOrder.entries.map { it to it.label }, setup.order, { onChange(setup.copy(order = it)) })
@@ -167,7 +171,14 @@ fun CoverCheckScreen(setup: CoverSetup, onChange: (CoverSetup) -> Unit, onBack: 
 @Composable
 private fun Verdict(result: CoverResult) {
     val parts = buildList {
+        if (result.melee) {
+            add("Control range" to TargetColor)
+            add("Fight" to ShooterColor)
+            add("Can't shoot" to TargetColor)
+            return@buildList
+        }
         add((if (result.valid) "Valid target" else "Not a valid target") to (if (result.valid) ShooterColor else TargetColor))
+        if (result.canCharge) add("Can charge" to ShooterColor)
         if (result.valid) {
             when (result.coverSave) {
                 CoverSave.NORMAL -> add("Cover save" to TargetColor)
@@ -197,13 +208,18 @@ private fun Diagram(
     result: CoverResult,
     selectedId: Int?,
     onSelect: (Int?) -> Unit,
-    onMove: (TerrainPiece) -> Unit,
+    onChange: (CoverSetup) -> Unit,
 ) {
     val measurer = rememberTextMeasurer()
+    // Inches shown top to bottom. Held while dragging so the board doesn't rescale under the finger,
+    // then eases to fit once the finger lifts.
+    var heldRange by remember { mutableStateOf<Float?>(null) }
+    val range by animateFloatAsState(heldRange ?: fitRange(setup), label = "range")
     val current by rememberUpdatedState(setup)
+    val currentRange by rememberUpdatedState(range)
     val currentSelected by rememberUpdatedState(selectedId)
     // The gesture handlers live across recompositions, so they must call the latest callbacks.
-    val move by rememberUpdatedState(onMove)
+    val change by rememberUpdatedState(onChange)
     val select by rememberUpdatedState(onSelect)
     val labelColor = MaterialTheme.colorScheme.onSurface
 
@@ -215,44 +231,81 @@ private fun Diagram(
                 .pointerInput(Unit) {
                     // Tapping overlapping pieces cycles through them.
                     detectTapGestures { pos ->
-                        val h = size.height.toFloat()
+                        val geo = Geometry(size.height.toFloat(), currentRange)
                         val others = current.copy(pieces = current.pieces.filter { it.id != currentSelected })
-                        select(nearest(others, pos.y, h) ?: nearest(current, pos.y, h))
+                        select(nearestPiece(others, geo, pos.y) ?: nearestPiece(current, geo, pos.y))
                     }
                 }
                 .pointerInput(Unit) {
                     var dragging: Int? = null
                     detectDragGestures(
                         onDragStart = { pos ->
-                            dragging = nearest(current, pos.y, size.height.toFloat(), currentSelected)
-                            select(dragging)
+                            heldRange = currentRange
+                            val geo = Geometry(size.height.toFloat(), currentRange)
+                            dragging = grab(current, geo, pos, size.width / 2f, 32.dp.toPx(), currentSelected)
+                            if (dragging != TARGET && dragging != SHOOTER) select(dragging)
                         },
-                        onDragEnd = { dragging = null },
-                    ) { change, _ ->
-                        val piece = current.pieces.firstOrNull { it.id == dragging } ?: return@detectDragGestures
-                        change.consume()
-                        val geo = Geometry(size.height.toFloat(), current.distance)
-                        move(piece.copy(fromTarget = snap(geo.inchesAt(change.position.y)).coerceIn(0f, current.distance)))
+                        onDragEnd = { dragging = null; heldRange = null },
+                        onDragCancel = { dragging = null; heldRange = null },
+                    ) { pointer, _ ->
+                        val id = dragging ?: return@detectDragGestures
+                        pointer.consume()
+                        val s = current
+                        val geo = Geometry(size.height.toFloat(), currentRange)
+                        val at = snap(geo.inchesAt(pointer.position.y)).coerceIn(0f, currentRange)
+                        change(
+                            when (id) {
+                                SHOOTER -> s.withDistance((at - s.targetAt).coerceAtLeast(0f))
+                                // Terrain stays put on the board while the target moves past it.
+                                TARGET -> {
+                                    val newAt = at.coerceAtMost(s.targetAt + s.distance)
+                                    val shift = newAt - s.targetAt
+                                    s.copy(
+                                        targetAt = newAt,
+                                        distance = s.distance - shift,
+                                        pieces = s.pieces.map { it.copy(fromTarget = (it.fromTarget - shift).coerceIn(0f, s.distance - shift)) },
+                                    )
+                                }
+                                else -> s.copy(pieces = s.pieces.map {
+                                    if (it.id == id) it.copy(fromTarget = (at - s.targetAt).coerceIn(0f, s.distance)) else it
+                                })
+                            },
+                        )
                     }
                 },
         ) {
-            val geo = Geometry(size.height, setup.distance)
+            val geo = Geometry(size.height, range)
             val cx = size.width / 2
             val lineHalf = size.width * 0.32f
+            val targetY = geo.y(setup.targetAt)
+            val shooterY = geo.y(setup.targetAt + setup.distance)
 
-            // 1" zones: cover around the target, and where Heavy terrain stops obscuring.
-            zone(geo.y(0f), geo.y(1f), CoverColor.copy(alpha = 0.12f))
-            zone(geo.y(setup.distance - 1f), geo.y(setup.distance), Color.White.copy(alpha = 0.06f))
-            label(measurer, "cover 1\"", Offset(8.dp.toPx(), geo.y(1f) - 16.dp.toPx()), CoverColor.copy(alpha = 0.8f), 11)
-            label(measurer, "1\"", Offset(8.dp.toPx(), geo.y(setup.distance - 1f) + 2.dp.toPx()), labelColor.copy(alpha = 0.5f), 11)
+            if (result.melee) {
+                // Base to base: one shared control-range zone.
+                zone(targetY - geo.px(1f), shooterY + geo.px(1f), TargetColor.copy(alpha = 0.16f))
+                label(measurer, "control range", Offset(8.dp.toPx(), shooterY + geo.px(1f) - 16.dp.toPx()), TargetColor, 11)
+            } else {
+                // 1" zones: cover around the target, and where Heavy terrain stops obscuring.
+                zone(targetY, geo.y(setup.targetAt + 1f), CoverColor.copy(alpha = 0.12f))
+                zone(shooterY - geo.px(1f), shooterY, Color.White.copy(alpha = 0.06f))
+                label(measurer, "cover 1\"", Offset(8.dp.toPx(), geo.y(setup.targetAt + 1f) - 16.dp.toPx()), CoverColor.copy(alpha = 0.8f), 11)
+                label(measurer, "1\"", Offset(8.dp.toPx(), shooterY - geo.px(1f) + 2.dp.toPx()), labelColor.copy(alpha = 0.5f), 11)
+            }
 
             drawLine(
-                Color.White.copy(alpha = 0.5f), Offset(cx, geo.y(0f)), Offset(cx, geo.y(setup.distance)), 2.dp.toPx(),
+                (if (result.melee) TargetColor else Color.White).copy(alpha = 0.5f), Offset(cx, targetY), Offset(cx, shooterY), 2.dp.toPx(),
                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 6.dp.toPx())),
             )
 
+            // How far a Charge (Move + 2") gets the shooter towards the target.
+            val reachY = shooterY - geo.px(setup.move + 2f)
+            if (!result.melee && reachY > 0f) {
+                drawLine(ShooterColor, Offset(cx - 14.dp.toPx(), reachY), Offset(cx + 14.dp.toPx(), reachY), 3.dp.toPx(), StrokeCap.Round)
+                label(measurer, "charge", Offset(cx - 70.dp.toPx(), reachY - 8.dp.toPx()), ShooterColor, 11)
+            }
+
             setup.pieces.forEach { p ->
-                val y = geo.y(p.fromTarget)
+                val y = geo.y(setup.targetAt + p.fromTarget)
                 val role = result.roles[p.id] ?: PieceRole.NONE
                 val base = if (p.type == TerrainType.LIGHT) LightColor else HeavyColor
                 if (p.id == selectedId) {
@@ -278,25 +331,47 @@ private fun Diagram(
                 }
             }
 
-            operative(measurer, Offset(cx, geo.y(0f)), TargetColor, "TARGET · ${setup.order.label}${up(setup.targetHeight)}", above = true)
-            operative(measurer, Offset(cx, geo.y(setup.distance)), ShooterColor, "SHOOTER${up(setup.shooterHeight)}", above = false)
+            label(measurer, inches(setup.distance), Offset(cx + 24.dp.toPx(), (targetY + shooterY) / 2 - 8.dp.toPx()), labelColor.copy(alpha = 0.7f), 12)
+            operative(measurer, Offset(cx, targetY), TargetColor, "TARGET · ${setup.order.label}${up(setup.targetHeight)}", above = true)
+            operative(measurer, Offset(cx, shooterY), ShooterColor, "SHOOTER${up(setup.shooterHeight)}", above = false)
         }
     }
 }
 
-/** Maps inches from the target to y pixels, leaving room above and below for the operatives. */
-private class Geometry(height: Float, val distance: Float) {
+private const val TARGET = -1
+private const val SHOOTER = -2
+
+/** Inches the board shows: at least 6", and enough to fit both operatives. */
+private fun fitRange(s: CoverSetup) = maxOf(6f, s.targetAt + s.distance)
+
+/** Moves the shooter; terrain can't end up behind it. */
+private fun CoverSetup.withDistance(d: Float) =
+    copy(distance = d, pieces = pieces.map { it.copy(fromTarget = it.fromTarget.coerceAtMost(d)) })
+
+/** Maps inches down the board to y pixels, leaving room above and below for the operatives' labels. */
+private class Geometry(val height: Float, val range: Float) {
     private val top = height * 0.13f
     private val span = height * 0.74f
-    fun y(inches: Float) = top + inches / distance * span
-    fun inchesAt(y: Float) = (y - top) / span * distance
+    fun y(inches: Float) = top + inches / range * span
+    fun px(inches: Float) = inches / range * span
+    fun inchesAt(y: Float) = (y - top) / span * range
+}
+
+/** An operative near the centre line wins over terrain; otherwise the piece under [pos]. */
+private fun grab(s: CoverSetup, geo: Geometry, pos: Offset, cx: Float, reach: Float, selected: Int?): Int? {
+    if (abs(pos.x - cx) < reach * 1.5f) {
+        val toTarget = abs(geo.y(s.targetAt) - pos.y)
+        val toShooter = abs(geo.y(s.targetAt + s.distance) - pos.y)
+        if (minOf(toTarget, toShooter) < reach) return if (toShooter <= toTarget) SHOOTER else TARGET
+    }
+    return nearestPiece(s, geo, pos.y, selected)
 }
 
 /** The piece under [y]; the selected one wins when pieces overlap, e.g. one just added on top of another. */
-private fun nearest(setup: CoverSetup, y: Float, height: Float, selected: Int? = null): Int? {
-    val geo = Geometry(height, setup.distance)
-    val near = setup.pieces.filter { abs(geo.y(it.fromTarget) - y) < height * 0.07f }
-    return (near.firstOrNull { it.id == selected } ?: near.minByOrNull { abs(geo.y(it.fromTarget) - y) })?.id
+private fun nearestPiece(s: CoverSetup, geo: Geometry, y: Float, selected: Int? = null): Int? {
+    fun gap(p: TerrainPiece) = abs(geo.y(s.targetAt + p.fromTarget) - y)
+    val near = s.pieces.filter { gap(it) < geo.height * 0.07f }
+    return (near.firstOrNull { it.id == selected } ?: near.minByOrNull(::gap))?.id
 }
 
 private fun DrawScope.zone(from: Float, to: Float, color: Color) =
@@ -355,12 +430,6 @@ private fun PieceEditor(piece: TerrainPiece, distance: Float, onChange: (Terrain
 }
 
 private fun snap(inches: Float) = (inches * 4).roundToInt() / 4f
-
-private fun inches(v: Float): String {
-    val whole = v.toInt()
-    val frac = when (((v - whole) * 4).roundToInt()) { 1 -> "¼"; 2 -> "½"; 3 -> "¾"; 4 -> return "${whole + 1}\""; else -> "" }
-    return if (whole == 0 && frac.isNotEmpty()) "$frac\"" else "$whole$frac\""
-}
 
 private fun height(v: Float) = if (v <= 0f) "Floor" else inches(v)
 
