@@ -9,6 +9,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import com.killteamtimer.ui.cover.CoverCheckScreen
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -54,10 +56,24 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun App(vm: AppViewModel) {
+    Box(Modifier.fillMaxSize()) {
+        CurrentScreen(vm)
+        if (vm.coverCheckOpen) {
+            BackHandler { vm.coverCheckOpen = false }
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                CoverCheckScreen(vm.coverSetup, onChange = { vm.coverSetup = it }, onBack = { vm.coverCheckOpen = false })
+            }
+        }
+    }
+}
+
+@Composable
+private fun CurrentScreen(vm: AppViewModel) {
     when (vm.screen) {
         Screen.HOME -> HomeScreen(
             onSinglePhone = { vm.goTo(Screen.LOCAL_SETUP) },
             onMultiPhone = { vm.goTo(Screen.LOBBY_ENTRY) },
+            onCoverCheck = { vm.coverCheckOpen = true },
         )
 
         Screen.LOCAL_SETUP -> {
@@ -72,7 +88,7 @@ private fun App(vm: AppViewModel) {
         }
 
         Screen.LOCAL_GAME -> vm.local?.let {
-            LocalGameScreen(it, onRematch = vm::startLocalGame, onExit = vm::leave)
+            LocalGameScreen(it, onRematch = vm::startLocalGame, onExit = vm::leave, onCoverCheck = { vm.coverCheckOpen = true })
         }
 
         Screen.LOBBY_ENTRY -> {
@@ -137,6 +153,7 @@ private fun RemoteGame(vm: AppViewModel) {
                 teamId = vm.team(myId),
                 onTeamChange = { vm.setTeam(myId, it) },
                 header = header,
+                onCoverCheck = { vm.coverCheckOpen = true },
             )
         }
     } else if (client != null) {
@@ -155,6 +172,7 @@ private fun RemoteGame(vm: AppViewModel) {
             onExit = vm::leave,
             teamId = vm.team(id),
             onTeamChange = { vm.setTeam(id, it) },
+            onCoverCheck = { vm.coverCheckOpen = true },
         )
     }
 }

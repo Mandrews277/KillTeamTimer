@@ -62,7 +62,7 @@ import com.killteamtimer.ui.theme.playerColor
  * side are rotated 180 degrees.
  */
 @Composable
-fun LocalGameScreen(controller: GameController, onRematch: () -> Unit, onExit: () -> Unit) {
+fun LocalGameScreen(controller: GameController, onRematch: () -> Unit, onExit: () -> Unit, onCoverCheck: () -> Unit) {
     KeepScreenOn()
     val game by controller.game.collectAsState()
     val state = game ?: return
@@ -130,6 +130,7 @@ fun LocalGameScreen(controller: GameController, onRematch: () -> Unit, onExit: (
             },
             dismissButton = {
                 Row {
+                    TextButton(onClick = { menuOpen = false; onCoverCheck() }) { Text("Cover check") }
                     TextButton(onClick = onExit) { Text("Quit") }
                     TextButton(onClick = { menuOpen = false }) { Text("Cancel") }
                 }

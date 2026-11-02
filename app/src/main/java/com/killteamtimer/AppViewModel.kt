@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.killteamtimer.cover.CoverSetup
 import com.killteamtimer.engine.Clock
 import com.killteamtimer.engine.GameConfig
 import com.killteamtimer.engine.GameEngine
@@ -92,6 +93,10 @@ class AppViewModel(app: Application) : AndroidViewModel(app) {
     var localNames by mutableStateOf(listOf("Player 1", "Player 2"))
     var localConfig by mutableStateOf(GameConfig())
     var hostConfig by mutableStateOf(GameConfig())
+
+    /** Cover check page, shown over whatever screen is open so a running game carries on underneath. */
+    var coverCheckOpen by mutableStateOf(false)
+    var coverSetup by mutableStateOf(CoverSetup())
 
     fun goTo(target: Screen) {
         screen = target

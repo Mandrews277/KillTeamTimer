@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.material3.Button
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -19,7 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun HomeScreen(onSinglePhone: () -> Unit, onMultiPhone: () -> Unit) {
+fun HomeScreen(onSinglePhone: () -> Unit, onMultiPhone: () -> Unit, onCoverCheck: () -> Unit) {
     Column(
         Modifier
             .fillMaxSize()
@@ -37,6 +38,10 @@ fun HomeScreen(onSinglePhone: () -> Unit, onMultiPhone: () -> Unit) {
         Spacer(Modifier.height(16.dp))
         FilledTonalButton(onClick = onMultiPhone, Modifier.fillMaxWidth().height(64.dp)) {
             Text("Phone per player")
+        }
+        Spacer(Modifier.height(16.dp))
+        OutlinedButton(onClick = onCoverCheck, Modifier.fillMaxWidth().height(56.dp)) {
+            Text("Cover & obscuring check")
         }
     }
 }

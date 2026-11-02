@@ -29,6 +29,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -87,6 +88,7 @@ fun RemoteGameScreen(
     teamId: String?,
     onTeamChange: (String) -> Unit,
     header: (@Composable () -> Unit)? = null,
+    onCoverCheck: () -> Unit = {},
 ) {
     KeepScreenOn()
     val game by controller.game.collectAsState()
@@ -209,6 +211,10 @@ fun RemoteGameScreen(
         }
 
         CpCounter(commandPoints, onCommandPointsChange)
+
+        FilledTonalButton(onClick = onCoverCheck, Modifier.fillMaxWidth().height(56.dp)) {
+            Text("Cover & obscuring check")
+        }
 
         RulesHelper(teamId, onTeamChange)
 
